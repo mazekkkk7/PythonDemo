@@ -138,4 +138,4 @@ def run_pubsub():
             break
 
 
-run_pubsub();
+run_pubsub()
