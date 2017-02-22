@@ -1,4 +1,7 @@
+import threading
+
 import redis
+import time
 
 conn = redis.Redis()
 
@@ -87,12 +90,48 @@ conn = redis.Redis()
 # print conn.hincrby('Hash2','num')
 # print conn.hexists('Hash2','num')
 
-conn.delete('ZSet')
-print conn.zadd('ZSet','a','3','b','2','c','1')
-print conn.zcard('ZSet')
-print conn.zincrby('ZSet','c',3)
-print conn.zscore('ZSet','b')
-print conn.zrank('ZSet','c')
-print conn.zcount('ZSet',0,3)
-print conn.zrem('ZSet','b')
-print conn.zrange('ZSet',0,-1,withscores=True)
+# conn.delete('ZSet')
+# print conn.zadd('ZSet','a','3','b','2','c','1')
+# print conn.zcard('ZSet')
+# print conn.zincrby('ZSet','c',3)
+# print conn.zscore('ZSet','b')
+# print conn.zrank('ZSet','c')
+# print conn.zcount('ZSet',0,3)
+# print conn.zrem('ZSet','b')
+# print conn.zrange('ZSet',0,-1,withscores=True)
+
+# conn.delete('ZSet2')
+# conn.delete('ZSet3')
+# conn.delete('ZSet4')
+# conn.delete('ZSet5')
+# conn.delete('ZSet6')
+# conn.delete('ZSet7')
+# print conn.zadd('ZSet2','a',1,'b',2,'c',3)
+# print conn.zadd('ZSet3','b',4,'c',1,'d',0)
+# print conn.zinterstore('ZSet4',['ZSet2','ZSet3'])
+# print conn.zrange('ZSet4',0,-1,withscores=True)
+# print conn.zunionstore('ZSet5',['ZSet2','ZSet3'],aggregate='min')
+# print conn.zrange('ZSet5',0,-1,withscores=True)
+# print conn.sadd('ZSet6','a','d')
+# print conn.zunionstore('ZSet7',['ZSet2','ZSet3','ZSet6'])
+# print conn.zrange('ZSet7',0,-1,withscores=True)
+
+def publisher(n):
+    time.sleep(1)
+    for i in xrange(n):
+        conn.publish('channel',i)
+        time.sleep(1)
+def run_pubsub():
+    threading.Thread(target=publisher,args=(5,)).start()
+    pubsub = conn.pubsub()
+    pubsub.subscribe(['channel'])
+    count = 0
+    for item in pubsub.listen():
+        print item
+        count += 1
+        if count == 6:
+            pubsub.unsubscribe()
+        if count == 7:
+            break
+
+run_pubsub();
