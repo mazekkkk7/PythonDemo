@@ -5,11 +5,12 @@ import time
 
 conn = redis.Redis()
 
+
 # conn.delete('hello')
 # conn.set('hello','world')
 # conn.get('hello')
 # print(conn.get('hello'))
-#!---------------------------------------------------------------------------------------------------------------
+# !---------------------------------------------------------------------------------------------------------------
 # conn.delete('number')
 # print conn.incr('number')
 # print conn.incr('number',15)
@@ -119,10 +120,12 @@ conn = redis.Redis()
 def publisher(n):
     time.sleep(1)
     for i in xrange(n):
-        conn.publish('channel',i)
+        conn.publish('channel', i)
         time.sleep(1)
+
+
 def run_pubsub():
-    threading.Thread(target=publisher,args=(5,)).start()
+    threading.Thread(target=publisher, args=(5,)).start()
     pubsub = conn.pubsub()
     pubsub.subscribe(['channel'])
     count = 0
@@ -133,5 +136,6 @@ def run_pubsub():
             pubsub.unsubscribe()
         if count == 7:
             break
+
 
 run_pubsub();
