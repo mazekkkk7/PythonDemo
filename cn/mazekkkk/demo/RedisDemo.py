@@ -1,3 +1,4 @@
+#-*- coding:utf-8 -*-
 import threading
 
 import redis
@@ -5,12 +6,12 @@ import time
 
 conn = redis.Redis()
 
-
 # conn.delete('hello')
 # conn.set('hello','world')
 # conn.get('hello')
 # print(conn.get('hello'))
 # !---------------------------------------------------------------------------------------------------------------
+
 # conn.delete('number')
 # print conn.incr('number')
 # print conn.incr('number',15)
@@ -117,24 +118,84 @@ conn = redis.Redis()
 # print conn.zunionstore('ZSet7',['ZSet2','ZSet3','ZSet6'])
 # print conn.zrange('ZSet7',0,-1,withscores=True)
 
-def publisher(n):
-    time.sleep(1)
-    for i in xrange(n):
-        conn.publish('channel', i)
-        time.sleep(1)
+# def publisher(n):
+#     time.sleep(1)
+#     for i in xrange(n):
+#         conn.publish('channel', i)
+#         time.sleep(1)
+#
+#
+# def run_pubsub():
+#     threading.Thread(target=publisher, args=(5,)).start()
+#     pubsub = conn.pubsub()
+#     pubsub.subscribe(['channel'])
+#     count = 0
+#     for item in pubsub.listen():
+#         print item
+#         count += 1
+#         if count == 6:
+#             pubsub.unsubscribe()
+#         if count == 7:
+#             break
+#
+# run_pubsub()
 
+# conn.delete('sort-input')
+# conn.delete('field')
+# print conn.rpush('sort-input',23,15,110,7)
+# print conn.sort('sort-input')
+# print conn.sort('sort-input',alpha=True)
+# print conn.hset('d-7','field',5)
+# print conn.hset('d-15','field',1)
+# print conn.hset('d-23','field',9)
+# print conn.hset('d-110','field',3)
+# print conn.sort('sort-input',by='d-*->field')
+# print conn.sort('sort-input',by='d-*->field',get='d-*->field')
 
-def run_pubsub():
-    threading.Thread(target=publisher, args=(5,)).start()
-    pubsub = conn.pubsub()
-    pubsub.subscribe(['channel'])
-    count = 0
-    for item in pubsub.listen():
-        print item
-        count += 1
-        if count == 6:
-            pubsub.unsubscribe()
-        if count == 7:
-            break
+# 这个def demo有点问题，没有按书上预期的运行
+# def notrans():
+#     print conn.incr('notrans:')
+#     time.sleep(.1)
+#     conn.incr('notrans:',-1)
+# if 1:
+#     for i in xrange(3):
+#         threading.Thread(target=notrans).start()
+#         time.sleep(.5)
 
-run_pubsub()
+# 这个def是正常的
+# def trans():
+#     pipline = conn.pipeline();
+#     pipline.incr('trans:')
+#     time.sleep(.1)
+#     pipline.incr('trans:',-1)
+#     print pipline.execute()[0]
+# if 1:
+#     for i in xrange(3):
+#         threading.Thread(target=trans).start()
+#         time.sleep(.5)
+
+# 键的过期时间
+# conn.delete('key')
+# print conn.set('key','value')
+# print conn.get('key')
+# print conn.expire('key',2)
+# time.sleep(2)
+# print conn.get('key')
+# print conn.set('key','value2')
+# print conn.expire('key',100)
+# print conn.ttl('key')
+
+# 日志处理函数
+# def process_logs(conn,path,callback):
+#     current_file, offset = conn.mget('progress:file','progress:position')
+#     pipe = conn.pipeline()
+
+#更新正在处理的日志文件的名字和偏移量
+# def update_progress():
+#     pipe.mset({
+#         'progress:file':fname
+#         'progress:position':offset
+#     })
+#     pipe.execute()
+
+# 有序遍历日志文件
