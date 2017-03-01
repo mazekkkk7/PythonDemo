@@ -217,5 +217,4 @@ conn = redis.Redis()
 #         if not(lno+1) % 100:
 #             update_progress()
 #     update_progress()
-#
 #     inp.close()
