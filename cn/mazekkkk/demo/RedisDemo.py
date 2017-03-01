@@ -199,3 +199,23 @@ conn = redis.Redis()
 #     pipe.execute()
 
 # 有序遍历日志文件
+# for fname in sorted(os.listdir(path)):
+#     if fname < current_file:
+#         continue
+#     inp = open(os.path.join(path,fname),'rb')
+#     if fname == current_file:
+#         inp.seek(int(offset,10))
+#     else:
+#         offset = 0
+#
+#     current_file = None
+#
+#     for lno, line in enumerate(inp):
+#         callback(pipe,line)
+#         offset += int(offset) + len(line)
+#
+#         if not(lno+1) % 100:
+#             update_progress()
+#     update_progress()
+#
+#     inp.close()
