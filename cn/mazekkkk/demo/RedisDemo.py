@@ -218,3 +218,47 @@ conn = redis.Redis()
 #             update_progress()
 #     update_progress()
 #     inp.close()
+
+# 检查硬盘写入函数
+# def wait_for_sync(mconn,sconn):
+#     identifier = str(uuid.uuid4())
+#     mconn.zadd('sync:wait',identifier,time.time())
+#
+#     while not sconn.info()['master_link_status'] != 'up'
+#         time.sleep(.001)
+#
+#     while not sconn.zscore('sync:wait',identifier):
+#         time.sleep(.001)
+#
+#     deadline = time.time() + 1.01
+#     while time.time() < deadline:
+#         if sconn.info()['aof_pending_bio_fsync'] == 0:
+#             break
+#         time.sleep(.001)
+#
+#     mconn.zrem('sync:wait',identifier)
+#     mconn.zremrangebyscore('sync:wait',0,time.time()-900)
+
+# 商品上架函数
+def list_item(conn,itemid,sellerid,price):
+    inventory = "inventory:%s" %sellerid
+    item = "%s.%s" %(itemid,sellerid)
+    end = time.time() + 5
+    pipe = conn.pipeline()
+
+    while time.time() < end:
+        try:
+            pipe.watch(inventory)
+            if not pipe.sismember(inventory,itemid):
+                pipe.unwatch()
+                return None
+
+            pipe.multi()
+            pipe.zadd("market:",item,price)
+            pipe.srem(inventory,itemid)
+            pipe.execute()
+            return True
+        except redis.exception.WatchError:
+            pass
+    return False
+
