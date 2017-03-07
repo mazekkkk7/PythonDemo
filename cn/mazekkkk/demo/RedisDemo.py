@@ -124,7 +124,7 @@ conn = redis.Redis()
 #         conn.publish('channel', i)
 #         time.sleep(1)
 #
-#
+
 # def run_pubsub():
 #     threading.Thread(target=publisher, args=(5,)).start()
 #     pubsub = conn.pubsub()
@@ -240,25 +240,138 @@ conn = redis.Redis()
 #     mconn.zremrangebyscore('sync:wait',0,time.time()-900)
 
 # 商品上架函数
-def list_item(conn,itemid,sellerid,price):
-    inventory = "inventory:%s" %sellerid
-    item = "%s.%s" %(itemid,sellerid)
-    end = time.time() + 5
-    pipe = conn.pipeline()
+# def list_item(conn,itemid,sellerid,price):
+#     inventory = "inventory:%s" %sellerid
+#     item = "%s.%s" %(itemid,sellerid)
+#     end = time.time() + 5
+#     pipe = conn.pipeline()
+#
+#     while time.time() < end:
+#         try:
+#             pipe.watch(inventory)
+#             if not pipe.sismember(inventory,itemid):
+#                 pipe.unwatch()
+#                 return None
+#
+#             pipe.multi()
+#             pipe.zadd("market:",item,price)
+#             pipe.srem(inventory,itemid)
+#             pipe.execute()
+#             return True
+#         except redis.exception.WatchError:
+#             pass
+#     return False
 
-    while time.time() < end:
-        try:
-            pipe.watch(inventory)
-            if not pipe.sismember(inventory,itemid):
-                pipe.unwatch()
-                return None
+# 商品购买函数
+# def purchase_item(conn,buyerid,itemid,sellerid,lprice):
+#     buyer = "users:%s"%buyerid
+#     seller = "users:%s"%sellerid
+#     item = "%s,%s"%(itemid,sellerid)
+#     inventory = "inventory:%s"%buyerid
+#     end = time.time() + 10
+#     pipe = conn.pipeline()
+#
+#     while time.time() < end:
+#         try:
+#             # 监控这一条数据
+#             pipe.watch("market:",buyer)
+#
+#             price = pipe.zscore("market:",item)
+#             funds = int(pipe.hget(buyer,"funds"))
+#             if price != lprice or price > funds:
+#                 pipe.unwatch()
+#                 return None
+#             pipe.multi()
+#             pipe.hincrby(seller,"funds",int(price))
+#             pipe.hincrby(buyer,"funds",int(-price))
+#             pipe.sadd(inventory,itemid)
+#             pipe.zrem("market:",item)
+#             pipe.execute()
+#             return True
+#         except redis.exceptions.WatchError:
+#             pass
+#
+#     return False
 
-            pipe.multi()
-            pipe.zadd("market:",item,price)
-            pipe.srem(inventory,itemid)
-            pipe.execute()
-            return True
-        except redis.exception.WatchError:
-            pass
-    return False
+# 函数是第一张给出的例子未实现
+# def update_token(conn,token,user,item=None):
+#     pass
+
+# 使用流水线来处理与Redis的交互次数提升效率
+# def update_token_pipeline(conn,token,user,item=None):
+#     timestamp = time.time()
+#     pipe = conn.pipeline(False)
+#     pipe.hset('login:',token,user)
+#     pipe.zadd('recent:',token,timestamp)
+#     if item:
+#         pipe.zadd('viewed:' + token,item,timestamp)
+#         pipe.zremrangebyrank('viewed:' + token,0,-26)
+#         pipe.zincrby('viewed:',item,-1)
+#     pipe.execute()
+
+# 批量测试函数
+# def benchmark_update_token(conn,duration):
+#     for function in (update_token,update_token_pipeline):
+#         count = 0
+#         start = time.time()
+#         end = start + duration
+#         while time.time() < end:
+#             count+=1
+#             function(conn,'token','user','item')
+#         delta = time.time() - start
+#         print function.__name__,count,delta,count/delta
+# SEVERITY = {
+#     logging.DEBUG: 'debug',
+#     logging.INFO: 'info',
+#     logging.WARNING: 'warning',
+#     logging.ERROR: 'error',
+#     logging.CRITICAL: 'critical',
+# }
+# SERVERITY.update((name,name) for name in SEVERITY.values())
+# 记录最新日志
+# def log_recent(conn,name,message,serverity=logging.INFO,pipe=None):
+#     serverity = str(SEVERITY.get(serverity,serverity)).lower()
+#     destination = 'recent:%s:%s'%(name,serverity)
+#     message = time.asctime() + ' ' + message
+#     pipe = pipe or conn.pipeline()
+#     pipe.lpush(destination,message)
+#     pipe.ltrim(destination,0,99)
+#     pipe.execute()
+# 常见日志
+# def log_common(conn,name,message,serverity=logging.INFO,timeout=5):
+#     serverity = str(SEVERITY.get(serverity,serverity)).lower()
+#     destination = 'common:%s:%s'%(name,serverity)
+#     start_key = destination + ' :start'
+#     pipe = conn.pipeline()
+#     end = time.time() + timeout
+#     while time.time() < end:
+#         try:
+#             pipe.watch(start_key)
+#             now = datetime.utcnow().timetuple()
+#             hour_start = datetime(*now[:4]).isoformat()
+#
+#             existing = pipe.get(start_key)
+#             pipe.multi()
+#             if existing and existing < hour_start:
+#                 pipe.rename(destination,destination + ' :last')
+#                 pipe.rename(start_key,destination + ' :pstart')
+#                 pipe.set(start_key,hour_start)
+#             elif not existing:
+#                 pipe.set(start_key,hour_start)
+#             pipe.zincrby(destination,message)
+#             log_recent(pipe,name,message,serverity,pipe)
+#             return
+#         except redis.exceptions.WatchError:
+#             continue
+# 更新计数器
+# PRECISION = [1,5,60,300,3600,18000,86400]
+# def update_counter(conn,name,count=1,now=None):
+#     now = now or time.time()
+#     pipe = conn.pipeline()
+#     for prec in PRECISION:
+#         pnow = int(now / prec) * prec
+#         hash = '%s:%s' %(prec,name)
+#         pipe.zadd('know:',hash,0)
+#         pipe.hincrby('count:' + hash,pnow,count)
+#     pipe.execute()
 
