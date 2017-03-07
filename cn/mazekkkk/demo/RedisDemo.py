@@ -1,8 +1,25 @@
 #-*- coding:utf-8 -*-
 import threading
 
-import redis
+import bisect
+import contextlib
+import csv
+from datetime import datetime
+import functools
+import json
+import logging
+import random
+import threading
 import time
+import unittest
+import uuid
+
+import redis
+
+QUIT = False
+SAMPLE_COUNT = 100
+
+config_connection = None
 
 conn = redis.Redis()
 
@@ -375,3 +392,159 @@ conn = redis.Redis()
 #         pipe.hincrby('count:' + hash,pnow,count)
 #     pipe.execute()
 
+# 获取计数器
+# def get_count(conn,name,precistion):
+#     hash = '%s:%s'%(name,precistion)
+#     data = conn.get('count:' + hash)
+#     to_return = []
+#     for key,value in data.iteritems():
+#         to_return.append(int(key),int(value))
+#     to_return.sort()
+#     return to_return
+
+# # 计数器清理函数
+# def clean_counters(conn):
+#     pipe = conn.pipeline(True)
+#     passes = 0
+#     while not quit:
+#         start = time.time()
+#         index = 0
+#         while index < conn.zcard('know:'):
+#             hash = conn.zrange('know:',index,index)
+#             index += 1
+#             if not hash:
+#                 break
+#             hash = hash[0]
+#             prec = int(hash.partition(':')[0])
+#             bprec = int(prec // 60) or 1
+#             if passes % bprec:
+#                 continue
+#
+#             hkey = 'count:' + hash
+#             cutoff = time.time() - SAMPLE_COUNT * prec
+#             samples = map(int,conn.hkeys(hkey))
+#             samples.sort()
+#             remove = bisect.bisect_right(samples,cutoff)
+#
+#             if remove:
+#                 conn.hdel(hkey,*samples[:remove])
+#                 if remove == len(samples):
+#                     try:
+#                         pipe.watch(hkey)
+#                         if not pipe.hlen(hkey):
+#                             pipe.multi()
+#                             pipe.zrem('know:',hash)
+#                             pipe.execute()
+#                             index -=1
+#                         else:
+#                             pipe.unwatch()
+#                     except redis.exceptions.WatchError:
+#                         pass
+#         passes += 1
+#         duration = min(int(time.time() - start) + 1,60)
+#         time.sleep(max(60-duration,1))
+
+# 更新统计函数
+def update_stats(conn,context,type,value,timeout=5):
+    destination = 'stats:%s:%s'%(context,type)
+    start_key = destination + ':start'
+    pipe = conn.pipeline(True)
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            pipe.watch(start_key)
+            now = datetime.utcnow().timetuple()
+            hour_start = datetime(*now[:4]).isoformat()
+
+            existing = pipe.get(start_key)
+            pipe.multi()
+            if existing and existing < hour_start:
+                pipe.rename(destination,destination + ':last')
+                pipe.rename(start_key,destination + ':pstart')
+                pipe.set(start_key,hour_start)
+            tkey1 = str(uuid.uuid4())
+            tkey2 = str(uuid.uuid4())
+            pipe.zadd(tkey1,'min',value)
+            pipe.zadd(tkey2,'max',value)
+            pipe.zunionstore(destination,[destination,tkey1],aggregate='min')
+            pipe.zunionstore(destination,[destination, tkey2], aggregate='max')
+            pipe.delete(tkey1,tkey2)
+            pipe.zincrby(destination,'count')
+            pipe.zincrby(destination,'sum',value)
+            pipe.zincrby(destination,'sumsq',value*value)
+
+            return pipe.execute()[-3:]
+        except redis.exceptions.WatchError:
+            continue
+
+# 获取状态
+def get_status(conn,context,type):
+    key = 'status:%s:%s'%(context,type)
+    data = dict(conn.zrange(key,0,-1,withscores=True))
+    data['average'] = data['sum'] / data['count']
+    numberator = data['sumsq'] - data['sum'] ** 2 / data['count']
+    data['stddev'] = (numberator / (data['count'] -1 or 1)) ** .5
+    return data
+
+# 上下文管理器
+@contextlib.contextmanager
+def access_time(conn,context):
+    start = time.time()
+    yield
+
+    delta = time.time() - start
+    stats = update_stats(conn,context,'AccessTime',delta)
+    average = stats[1] / stats[0]
+
+    pipe = conn.pipeline(True)
+    pipe.zadd('slowest:AccessTime',context,average)
+    pipe.zremragebyrank('slowest:AccessTime',0,-101)
+    pipe.execute()
+
+def process_view(conn,callback):
+    with access_time(conn,request.path):
+        return callback()
+# ip转化为分数
+def ip_to_score(ip_address):
+    score = 0
+    for v in ip_address.split(','):
+        score = score * 256 + int(v,10)
+    return score
+# 导入ip到redis
+def import_ips_to_redis(conn,filename):
+    csv_file = csv.reader(open(filename,'rb'))
+    for count, row in enumerate(csv_file):
+        start_ip = row[0] if row else ''
+        if 'i' in start_ip.lower():
+            continue
+        if '.' in start_ip:
+            start_ip = ip_to_score(start_ip)
+        elif start_ip.isdigit():
+            start_ip = int(start_ip,10)
+        else:
+            continue
+
+        city_id = row[2] + '_' + str(count)
+        conn.zadd('ip2cityid:',city_id,start_ip)
+# 导入城市到redis
+def import_cities_to_redis(conn,filename):
+    for row in csv.reader(open(filename,'rb')):
+        if len(row) < 4 or not row[0].isdigit():
+            continue
+        row = [i.decode('latin-1') for i in row]
+        city_id = row[0]
+        country = row[1]
+        region = row[2]
+        city = row[3]
+        conn.hset('cityid2city:',city_id,json.dumps([city,region,country])) #把数据转化为JSON
+# 查找ip所属的城市
+def find_city_by_ip(conn,ip_address):
+    if isinstance(ip_address,str):
+        ip_address = ip_to_score(ip_address)
+    city_id = conn.zrevarangebyscore('ip2cityid:',ip_address,0,start=0,num=1)
+
+    if not city_id:
+        return None
+
+    city_id = city_id[0].partition('_')[0]
+    return json.loads(conn.hget('cityid2city:',city_id))
