@@ -1,9 +1,9 @@
-#coding=utf-8
+# coding=utf-8
 
 # x = input("x:")
 # y = input("y:")
 # print("the multiplication result")
-# print(x*y)
+# print(x * y)
 
 # if 1 == 2: print 'one equals two'
 # if 1 == 1: print 'one equals one'
@@ -15,10 +15,10 @@
 # print 'C:\nowhere'
 # print r'C:\nowhere'
 
-# maze = ['maze',26]
-# chy = ['cy',27]
-# database = [maze,chy]
-# print database
+maze = ['maze',27]
+chy = ['cy',28]
+database = [maze,chy]
+print database
 
 # greeting = 'Hello'
 # print greeting[0]
@@ -198,7 +198,7 @@
 # from math import pi
 # print string % pi
 
-from string import Template
+# from string import Template
 
 # s = Template('$x. glorious $x!')
 # print s.substitute(x='slurm')
